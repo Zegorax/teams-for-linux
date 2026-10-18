@@ -47,6 +47,7 @@ let profilesManagerRef = null;
 let aboutBlankRequestCount = 0;
 let config;
 let window = null;
+let popoutWindows = null;
 let appConfig = null;
 let customBackgroundService = null;
 let streamSelector;
@@ -59,6 +60,11 @@ let browserWindowManager = null;
 let titleOverride = null;
 
 const isMac = os.platform() === "darwin";
+const {
+  PopoutWindowManager,
+  isMeetingJoinUrl,
+  meetingTarget,
+} = require("../popoutWindows");
 
 function setupScreenSharing(selectedSource) {
   screenSharingService.setSelectedSource(selectedSource);
@@ -742,6 +748,15 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
   window = await browserWindowManager.createWindow();
   streamSelector = new StreamSelector(window);
 
+  popoutWindows = new PopoutWindowManager({
+    config,
+    getMainWindow: () => window,
+    handleWindowOpen: onNewWindow,
+    iconImage: iconChooser
+      ? browserWindowManager.getIconImage(iconChooser.getFile())
+      : undefined,
+  });
+
   // Restrict WebRTC ICE candidate gathering to the interface with the default
   // route, preventing secondary interfaces (e.g. an ethernet adapter with no
   // internet gateway) from being advertised, which causes asymmetric STUN
@@ -926,6 +941,7 @@ exports.bindDisplayMediaHandler = bindDisplayMediaHandler;
 exports.bindWindowOpenHandler = bindWindowOpenHandler;
 exports.injectScreenSharingLogic = injectScreenSharingLogic;
 exports.setTitleOverride = setTitleOverride;
+exports.getPopoutWindows = () => popoutWindows;
 
 exports.setQuickChatManager = function (quickChatManager) {
   if (menus) {
@@ -1387,7 +1403,15 @@ function onNewWindow(details) {
 
   if (new RegExp(config.meetupJoinRegEx).test(details.url)) {
     if (config.onNewWindowOpenMeetupJoinUrlInApp) {
-      window.loadURL(details.url, { userAgent: config.chromeUserAgent });
+      // Meeting joins get their own window, as in the official client. Chat and
+      // channel launchers that the same pattern matches keep loading in place.
+      const openedInWindow =
+        isMeetingJoinUrl(details.url) &&
+        meetingTarget(config) === "window" &&
+        popoutWindows?.openMeeting(details.url);
+      if (!openedInWindow) {
+        window.loadURL(details.url, { userAgent: config.chromeUserAgent });
+      }
     }
     return { action: "deny" };
   } else if (
@@ -1473,6 +1497,8 @@ function onWindowClosed() {
     screenSharingService.setSelectedSource(null);
   }
 
+  popoutWindows?.closeAll();
+  popoutWindows = null;
   window = null;
   app.quit();
 }

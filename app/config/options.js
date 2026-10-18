@@ -961,6 +961,28 @@ module.exports = {
         },
         applyMode: "restart",
       },
+      multiWindow: {
+        default: {
+          enabled: true,
+          openMeetingsIn: "window",
+        },
+        describe: "Open chats and meetings in their own windows, as the official Windows and macOS clients do",
+        type: "object",
+        fields: {
+          "enabled": {
+            type: "boolean",
+            describe:
+              "Allow chat pop-outs (double-click a chat, or the Window menu) and meeting windows. When false the app keeps a single window.",
+          },
+          "openMeetingsIn": {
+            type: "string",
+            choices: ["window", "main"],
+            describe:
+              "Where meeting join links open: a dedicated window, or the main window. Applies when urlHandling.openMeetupJoinInApp is on.",
+          },
+        },
+        applyMode: "restart",
+      },
       quickChat: {
         default: {
           enabled: false,

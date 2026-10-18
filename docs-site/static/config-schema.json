@@ -1,7 +1,7 @@
 {
   "$generatedBy": "scripts/generateConfigDocs.js",
   "source": "app/config/options.js",
-  "optionCount": 85,
+  "optionCount": 86,
   "options": [
     {
       "name": "dbusControl",
@@ -1067,6 +1067,34 @@
           "type": "number",
           "default": 10,
           "description": "Seconds after which the meeting-started topic resets to false if you never join. Joining the call resets it immediately, whichever comes first."
+        }
+      ]
+    },
+    {
+      "name": "multiWindow",
+      "type": "object",
+      "default": {
+        "enabled": true,
+        "openMeetingsIn": "window"
+      },
+      "description": "Open chats and meetings in their own windows, as the official Windows and macOS clients do",
+      "applyMode": "restart",
+      "fields": [
+        {
+          "path": "enabled",
+          "type": "boolean",
+          "default": true,
+          "description": "Allow chat pop-outs (double-click a chat, or the Window menu) and meeting windows. When false the app keeps a single window."
+        },
+        {
+          "path": "openMeetingsIn",
+          "type": "string",
+          "default": "window",
+          "description": "Where meeting join links open: a dedicated window, or the main window. Applies when urlHandling.openMeetupJoinInApp is on.",
+          "choices": [
+            "window",
+            "main"
+          ]
         }
       ]
     },

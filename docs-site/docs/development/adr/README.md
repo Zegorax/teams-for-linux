@@ -32,7 +32,7 @@ Architecture Decision Records capture important architectural decisions along wi
 | [007](007-embedded-mqtt-broker.md) | Embedded MQTT Broker | ❌ Rejected | 2025-11-19 | N/A |
 | [008](008-usesystempicker-electron-38.md) | useSystemPicker Feature for Electron 38 | ❌ Rejected | 2025-11-24 | N/A |
 | [009](009-automated-testing-strategy.md) | Automated Testing Strategy | ✅ Implemented | 2025-12-13 | v2.7.4+ |
-| [010](010-multiple-windows-support.md) | Multiple Windows Support | 🔄 Superseded by [032](032-secondary-window-for-calls.md) | 2025-11-26 | N/A |
+| [010](010-multiple-windows-support.md) | Multiple Windows Support | 🔄 Superseded by [033](033-multi-window-popouts.md) | 2025-11-26 | N/A |
 | [011](011-appimage-update-info.md) | AppImage Update Info for Third-Party Managers | 🔄 Superseded | 2026-01-25 | v2.7.1 |
 | [012](012-intune-sso-broker-compatibility.md) | Intune SSO Broker Compatibility | ✅ Implemented | 2026-01-25 | v2.7.1 |
 | [013](013-pii-log-sanitization.md) | PII Log Sanitization | ✅ Implemented | 2026-01-31 | v2.7.3 |
@@ -53,7 +53,9 @@ Architecture Decision Records capture important architectural decisions along wi
 | [029](029-config-schema-single-source-of-truth.md) | Configuration Schema as Single Source of Truth | ✅ Accepted | 2026-09-05 | v2.12.0+ |
 | [030](030-graph-api-teams-session-token.md) | Graph API Access via the Teams Session Token | ✅ Implemented | 2025-11-21 | v2.6.17 |
 | [031](031-ozone-platform-x11-default.md) | Keep the `--ozone-platform=x11` Default on Wayland | ✅ Accepted | 2026-09-05 | N/A |
-| [032](032-secondary-window-for-calls.md) | Opt-in Secondary Window for the Same Account During Calls | 🚧 Proposed | 2026-09-18 | N/A |
+| [033](033-multi-window-popouts.md) | Chat Pop-outs and Meeting Windows | Generic multi-window, on by default: chats pop out on double-click, meeting joins open their own window; app-wide modules stay in the main window and call state is per renderer |
+| [032](032-secondary-window-for-calls.md) | Opt-in Secondary Window for the Same Account During Calls | 🔄 Superseded by [033](033-multi-window-popouts.md) | 2026-09-18 | N/A |
+| [033](033-multi-window-popouts.md) | Chat Pop-outs and Meeting Windows | ✅ Implemented | 2026-10-18 | N/A |
 
 **Legend:**
 - ✅ **Implemented** - Decision accepted and code in production

@@ -19,6 +19,15 @@ exports = module.exports = (Menus) => ({
       label: "Return to Teams",
       click: () => Menus.returnToTeams(),
     },
+    ...(Menus.configGroup.startupConfig.multiWindow?.enabled === false
+      ? []
+      : [
+          {
+            label: "Open Chat in New Window",
+            accelerator: "ctrl+alt+O",
+            click: () => Menus.popOutCurrentChat(),
+          },
+        ]),
     ...(Menus.configGroup.startupConfig.quickChat?.enabled
       ? [
           {

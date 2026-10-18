@@ -1,5 +1,6 @@
 const {
   app,
+  BrowserWindow,
   Menu,
   MenuItem,
   clipboard,
@@ -771,6 +772,13 @@ class Menus {
 
   showGpuInfo() {
     this.gpuInfoWindow.show();
+  }
+
+  // Ask the window that has focus to pop out the chat it is showing. The
+  // renderer reads the thread id from the Teams DOM and calls popout-open-chat.
+  popOutCurrentChat() {
+    const target = BrowserWindow.getFocusedWindow() ?? this.window;
+    target?.webContents?.send("popout-open-current-chat");
   }
 
   setQuickChatManager(quickChatManager) {

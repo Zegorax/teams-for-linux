@@ -19,7 +19,12 @@ const {
 const MIN_WINDOW_WIDTH = 400;
 const MIN_WINDOW_HEIGHT = 300;
 
+// Key for call events that arrive without a sender (tests, internal callers).
+const NO_SENDER = Symbol("no-sender");
+
 class BrowserWindowManager {
+  #callingSenders = new Set();
+
   constructor(properties) {
     this.config = properties.config;
     this.iconChooser = properties.iconChooser;
@@ -277,9 +282,18 @@ class BrowserWindowManager {
     }
   }
 
+  // Windows can be in a call at the same time (a meeting window next to the
+  // main window), so call state is tracked per renderer. Screen-lock inhibition
+  // and the app-wide connected/disconnected events follow the aggregate: they
+  // fire when the first call starts and when the last one ends.
   assignOnCallConnectedHandler() {
     return async (event) => {
+      const wasOnCall = this.#callingSenders.size > 0;
+      this.#callingSenders.add(event?.sender?.id ?? NO_SENDER);
       this.isOnCall = true;
+      if (wasOnCall) {
+        return undefined;
+      }
       const result = this.screenLockInhibitionMethod === "Electron"
         ? this.disableScreenLockElectron()
         : this.disableScreenLockWakeLockSentinel();
@@ -291,6 +305,10 @@ class BrowserWindowManager {
 
   assignOnCallDisconnectedHandler() {
     return async (event) => {
+      this.#callingSenders.delete(event?.sender?.id ?? NO_SENDER);
+      if (this.#callingSenders.size > 0) {
+        return undefined;
+      }
       this.isOnCall = false;
       const result = this.screenLockInhibitionMethod === "Electron"
         ? this.enableScreenLockElectron()

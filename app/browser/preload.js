@@ -1,4 +1,14 @@
 const { ipcRenderer } = require("electron");
+const {
+  ROLE_MAIN,
+  moduleRunsInRole,
+  roleFromArgv,
+} = require("../popoutWindows/role");
+
+// "main" for the primary window; "popout" or "meeting" for the windows the
+// main process opens through popoutWindows/. Pop-outs must not own app-wide
+// state (tray, badge, MQTT) or raise a second copy of every notification.
+const windowRole = roleFromArgv(process.argv);
 
 // #2677: Electron removed the non-standard `File.path` from dropped files, so
 // Teams (which uploads by native path) rejects them as "File is missing data".
@@ -293,6 +303,7 @@ function createWebNotification(classicNotification, title, options) {
 // own handler can open the conversation the notification came from (issue #2768).
 // Two ipcRenderer listeners for the whole renderer, not a pair per notification.
 const NotificationBridge = require("./notifications/notificationBridge");
+
 const notificationBridge = new NotificationBridge(ipcRenderer);
 
 function createElectronNotification(options) {
@@ -354,6 +365,13 @@ function createCustomNotification(title, options) {
 
   // Factory function that creates notification objects (avoids "return in constructor" issue)
   function CustomNotification(title, options) {
+    // The main window already raises the notification for every message; a
+    // pop-out raising it again would show each one twice. The stub keeps
+    // Teams' notification state machine working.
+    if (windowRole !== ROLE_MAIN) {
+      return createNotificationStub();
+    }
+
     // Use config from closure scope (will be null initially, populated async)
     if (notificationConfig?.disableNotifications) {
       // Return dummy object to avoid Teams errors
@@ -441,11 +459,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "customStickers", path: "./tools/customStickers" },
       { name: "dockIconRenderer", path: "./tools/dockIconRenderer" },
       { name: "preventDeviceSwitching", path: "./tools/preventDeviceSwitching" },
-      { name: "documentPictureInPicture", path: "./tools/documentPictureInPicture" }
-    ];
+      { name: "documentPictureInPicture", path: "./tools/documentPictureInPicture" },
+      { name: "popoutChat", path: "./tools/popoutChat" }
+    ].filter((module) => moduleRunsInRole(windowRole, module.name));
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
-    const modulesRequiringIpc = new Set(["settings", "theme", "trayIconRenderer", "mqttStatusMonitor", "meetingStartDetector", "webauthnOverride", "speakingIndicator", "customStickers", "dockIconRenderer"]);
+    const modulesRequiringIpc = new Set(["settings", "theme", "trayIconRenderer", "mqttStatusMonitor", "meetingStartDetector", "webauthnOverride", "speakingIndicator", "customStickers", "dockIconRenderer", "popoutChat"]);
 
     let successCount = 0;
     for (const module of modules) {
@@ -464,11 +483,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.info(`Preload: ${successCount}/${modules.length} browser modules initialized successfully`);
 
-    try {
-      const ActivityManager = require("./notifications/activityManager");
-      new ActivityManager(ipcRenderer, config).start();
-    } catch (err) {
-      console.error("Preload: ActivityManager failed to initialize:", err.message);
+    // Incoming-call and activity forwarding stays with the main window so a
+    // call rings once. Pop-outs still report their own call state through
+    // speakingIndicator.
+    if (windowRole === ROLE_MAIN) {
+      try {
+        const ActivityManager = require("./notifications/activityManager");
+        new ActivityManager(ipcRenderer, config).start();
+      } catch (err) {
+        console.error("Preload: ActivityManager failed to initialize:", err.message);
+      }
     }
 
     // Listen for config changes from the main process (e.g., when menu toggles are clicked)
