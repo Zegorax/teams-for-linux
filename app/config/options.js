@@ -965,6 +965,7 @@ module.exports = {
         default: {
           enabled: true,
           openMeetingsIn: "window",
+          focusLayout: true,
         },
         describe: "Open chats and meetings in their own windows, as the official Windows and macOS clients do",
         type: "object",
@@ -979,6 +980,11 @@ module.exports = {
             choices: ["window", "main"],
             describe:
               "Where meeting join links open: a dedicated window, or the main window. Applies when urlHandling.openMeetupJoinInApp is on.",
+          },
+          "focusLayout": {
+            type: "boolean",
+            describe:
+              "Show only the content in a pop-out window (no app bar or list pane), as the official client does. When false a pop-out shows the full Teams client.",
           },
         },
         applyMode: "restart",

@@ -1075,7 +1075,8 @@
       "type": "object",
       "default": {
         "enabled": true,
-        "openMeetingsIn": "window"
+        "openMeetingsIn": "window",
+        "focusLayout": true
       },
       "description": "Open chats and meetings in their own windows, as the official Windows and macOS clients do",
       "applyMode": "restart",
@@ -1095,6 +1096,12 @@
             "window",
             "main"
           ]
+        },
+        {
+          "path": "focusLayout",
+          "type": "boolean",
+          "default": true,
+          "description": "Show only the content in a pop-out window (no app bar or list pane), as the official client does. When false a pop-out shows the full Teams client."
         }
       ]
     },

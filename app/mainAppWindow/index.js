@@ -60,11 +60,7 @@ let browserWindowManager = null;
 let titleOverride = null;
 
 const isMac = os.platform() === "darwin";
-const {
-  PopoutWindowManager,
-  isMeetingJoinUrl,
-  meetingTarget,
-} = require("../popoutWindows");
+const { PopoutWindowManager } = require("../popoutWindows");
 
 function setupScreenSharing(selectedSource) {
   screenSharingService.setSelectedSource(selectedSource);
@@ -750,8 +746,7 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
 
   popoutWindows = new PopoutWindowManager({
     config,
-    getMainWindow: () => window,
-    handleWindowOpen: onNewWindow,
+    fallbackWindowOpen: onNewWindow,
     iconImage: iconChooser
       ? browserWindowManager.getIconImage(iconChooser.getFile())
       : undefined,
@@ -1403,15 +1398,7 @@ function onNewWindow(details) {
 
   if (new RegExp(config.meetupJoinRegEx).test(details.url)) {
     if (config.onNewWindowOpenMeetupJoinUrlInApp) {
-      // Meeting joins get their own window, as in the official client. Chat and
-      // channel launchers that the same pattern matches keep loading in place.
-      const openedInWindow =
-        isMeetingJoinUrl(details.url) &&
-        meetingTarget(config) === "window" &&
-        popoutWindows?.openMeeting(details.url);
-      if (!openedInWindow) {
-        window.loadURL(details.url, { userAgent: config.chromeUserAgent });
-      }
+      window.loadURL(details.url, { userAgent: config.chromeUserAgent });
     }
     return { action: "deny" };
   } else if (
@@ -1524,7 +1511,14 @@ function addEventHandlers() {
   });
 
   window.on("page-title-updated", onPageTitleUpdated);
-  window.webContents.setWindowOpenHandler(onNewWindow);
+  // Pop-outs and meeting windows are opened with window.open so they keep an
+  // opener; the manager decides which requests those are and falls back to
+  // onNewWindow for the rest.
+  if (popoutWindows) {
+    popoutWindows.attach(window.webContents);
+  } else {
+    window.webContents.setWindowOpenHandler(onNewWindow);
+  }
   window.webContents.session.webRequest.onBeforeRequest(
     { urls: ["https://*/*"] },
     onBeforeRequestHandler

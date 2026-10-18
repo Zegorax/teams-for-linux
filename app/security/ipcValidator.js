@@ -14,6 +14,7 @@ const allowedChannels = new Set([
   'config-file-changed',
   'config-changed',
   'get-config',
+  'get-window-role',
   'get-system-idle-state',
   'get-app-version',
   
@@ -110,7 +111,6 @@ const allowedChannels = new Set([
   'join-meeting-cancel',
 
   // Multi-window pop-outs
-  'popout-open-chat',
   // main -> renderer only (webContents.send); not gated by this validator,
   // listed so the allowlist stays authoritative per CLAUDE.md.
   'popout-open-current-chat',

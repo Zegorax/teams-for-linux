@@ -1,14 +1,12 @@
 const { ipcRenderer } = require("electron");
-const {
-  ROLE_MAIN,
-  moduleRunsInRole,
-  roleFromArgv,
-} = require("../popoutWindows/role");
+const { ROLE_MAIN, moduleRunsInRole } = require("../popoutWindows/role");
 
 // "main" for the primary window; "popout" or "meeting" for the windows the
 // main process opens through popoutWindows/. Pop-outs must not own app-wide
-// state (tray, badge, MQTT) or raise a second copy of every notification.
-const windowRole = roleFromArgv(process.argv);
+// state (tray, badge, MQTT) or raise a second copy of every notification. The
+// role comes from the main process once the page is ready; until then a window
+// counts as main, and notifications only start after Teams has loaded.
+let windowRole = ROLE_MAIN;
 
 // #2677: Electron removed the non-standard `File.path` from dropped files, so
 // Teams (which uploads by native path) rejects them as "File is missing data".
@@ -424,6 +422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.debug("Preload: DOMContentLoaded, initializing browser modules...");
   try {
     const config = await ipcRenderer.invoke("get-config");
+    windowRole = await ipcRenderer.invoke("get-window-role");
     console.debug("Preload: Got config:", {
       trayIconEnabled: config?.trayIconEnabled,
       useMutationTitleLogic: config?.useMutationTitleLogic
@@ -460,11 +459,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "dockIconRenderer", path: "./tools/dockIconRenderer" },
       { name: "preventDeviceSwitching", path: "./tools/preventDeviceSwitching" },
       { name: "documentPictureInPicture", path: "./tools/documentPictureInPicture" },
-      { name: "popoutChat", path: "./tools/popoutChat" }
+      { name: "popoutChat", path: "./tools/popoutChat" },
+      { name: "popoutLayout", path: "./tools/popoutLayout" }
     ].filter((module) => moduleRunsInRole(windowRole, module.name));
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
-    const modulesRequiringIpc = new Set(["settings", "theme", "trayIconRenderer", "mqttStatusMonitor", "meetingStartDetector", "webauthnOverride", "speakingIndicator", "customStickers", "dockIconRenderer", "popoutChat"]);
+    const modulesRequiringIpc = new Set(["settings", "theme", "trayIconRenderer", "mqttStatusMonitor", "meetingStartDetector", "webauthnOverride", "speakingIndicator", "customStickers", "dockIconRenderer", "popoutChat", "popoutLayout"]);
 
     let successCount = 0;
     for (const module of modules) {

@@ -10,51 +10,55 @@ id: 033-multi-window-popouts
 
 ## Context
 
-The Windows and macOS clients open chats, channel conversations and apps in their own windows, and always give a meeting its own window. Teams for Linux had one window, so reading a thread while presenting, or keeping a meeting on a second monitor, was not possible. ADR-032 proposed a single opt-in secondary window for calls. The request grew to match the official client: pop out any chat, and start meetings in a dedicated window, working in Flatpak.
+The Windows and macOS clients open chats, channel conversations, apps and calendar views in their own windows that show only that content, and always give a meeting its own window. Teams for Linux had one window, so reading a thread while presenting, or keeping a meeting on a second monitor, was not possible. ADR-032 proposed a single opt-in secondary window for calls. The request grew to match the official client: pop out any view, show only its content, start meetings in a dedicated window, and work in Flatpak.
 
-A spike on 2026-10-18 against a signed-in personal account (`teams.live.com`) established three facts:
+Spikes on 2026-10-18 against a signed-in personal account (`teams.live.com`) established the following about the Teams web client:
 
-- **Teams web does not ask for a pop-out.** Neither the chat list item menu nor the chat header menu offers "open in new window", and nothing calls `window.open` for a chat. The official client's pop-out is a desktop-host feature, as ADR-032 found for "Add shared display". The app therefore cannot wait for Teams to request a window.
-- **A chat can be opened by URL in a fresh document.** The `/l/chat/<thread>/conversations` launcher route, already used by `deepLinkRouter.js`, resolves in page. The thread id is in the DOM as `title-chat-list-item_<thread>` (list) and `chat-header-<thread>` (open chat).
-- **A second window on the same partition is signed in and independent**, including for a meeting join page.
+- **Teams web does not offer a pop-out.** The chat menus have no "open in new window" and nothing calls `window.open` for a chat. The code for it is in the bundle, but its feature flags (`enableChatsPopout`, `enableChatPopoutInContextMenu`) are set only for the desktop platforms ("Maglev", ids 48 to 51) and not for the browser platform (1415).
+- **The platform is derived from the user agent, and so is the host mode.** A user agent containing `Teams/<a.b.c.d>` or `maglev/...` selects Maglev. That also puts Teams into native-host mode (`hostCommunication.loadModule("core")`, windows created by the host). With no host the page never boots: spoofing the user agent gives a blank window and `ExperienceLoader: Could not get loading window`. The flags cannot be enabled without the host mode, and user-level overrides come from a server-side config service, so this route is closed. Do not retry it.
+- **A window is a secondary window when it has an opener on the same host.** In Teams' window provider, `opener !== null && opener.location.host === location.host` sets `viewportContext = "secondary"`. That already drops the top search bar and the "Chat |" title prefix.
+- **A chat resolves in a secondary window, a meeting join does not.** The `/l/chat/<thread>/conversations` launcher route renders in an opener-linked window. A meeting join link opened that way stays on the loading screen, so meetings use a window without an opener.
+- **Every view renders in one layout with stable regions** (`experience-layout`): `app-layout-area--nav` (app bar), `app-layout-area--mid-nav` (list pane) and `app-layout-area--main` (content). Hiding the first two shows only the content, for a chat and for the calendar alike.
 
 ## Decision
 
-Add a generic, **on by default** multi-window feature. The app opens the windows itself; it does not depend on Teams.
+Add a generic, **on by default** multi-window feature. The app opens the windows itself; it does not depend on Teams offering them.
 
-- **`app/popoutWindows/`** owns the secondary windows: a registry keyed by chat thread or meeting URL (a repeat request focuses the existing window), per-role persisted bounds, and a cascade offset. Each window uses the main window's partition and `webPreferences`, so it is signed in with no extra prompt.
-- **Window roles.** The main process passes `--teams-window-role=popout|meeting` to the preload. Pop-outs skip the app-wide modules (`settings`, `trayIconRenderer`, `mqttStatusMonitor`, `meetingStartDetector`, `dockIconRenderer`, `customStickers`), the `ActivityManager` (so a call rings once), and return a notification stub (so a message notifies once). Media tools, `speakingIndicator` and the call-state bridge stay.
-- **Chats.** Double-clicking a chat in the list (the official gesture) or the Window menu entry "Open Chat in New Window" (`Ctrl+Alt+O`) asks the main process over `popout-open-chat`. The thread id is validated against an allowlist pattern and the origin must be a Teams host.
-- **Meetings.** Meeting join links (`/l/meetup-join/`, `/meet/`) that previously loaded in the main window open a `meeting` window when `urlHandling.openMeetupJoinInApp` is on. Chat and channel launchers that the same regex matches keep loading in place.
+- **`app/popoutWindows/`** owns the secondary windows: a registry keyed by chat thread or meeting URL (a repeat request focuses the existing window), per-role persisted bounds and a cascade offset.
+- **Chat pop-outs are opened with `window.open`** from the renderer, with a frame name `tfl-popout:chat:<thread>`. The main window's `setWindowOpenHandler` allows exactly that shape (the URL must equal the launcher route rebuilt from the thread id, on a Teams host), so the new window has an opener and inherits the session partition. The manager adopts it on `did-create-window`.
+- **Meeting joins** (`/l/meetup-join/`, `/meet/`) that previously loaded in the main window open in a `meeting` window created with `loadURL` and no opener, when `urlHandling.openMeetupJoinInApp` is on. Chat and channel launchers matched by the same regex keep loading in place.
+- **Focus layout.** In a pop-out, `app/browser/tools/popoutLayout.js` injects a stylesheet that hides the app bar and the list pane and lets the content fill the window. Every rule is scoped with `:has()` on the content area, so if Teams renames the regions the pop-out is the full client instead of a blank window.
+- **Window roles over IPC.** The preload asks the main process (`get-window-role`, by `webContents` id) for `main`, `popout` or `meeting`. Options passed to a `window.open` child cannot carry a launch argument. Pop-outs skip the app-wide modules (`settings`, `trayIconRenderer`, `mqttStatusMonitor`, `meetingStartDetector`, `dockIconRenderer`, `customStickers`), the `ActivityManager` (so a call rings once), and return a notification stub (so a message notifies once). Media tools, `speakingIndicator` and the call-state bridge stay.
+- **Gestures.** Double-clicking a chat in the list (the official gesture) or the Window menu entry "Open Chat in New Window" (`Ctrl+Alt+O`, via `popout-open-current-chat`). The thread id is validated against an allowlist pattern.
 - **Lifecycle.** Closing a secondary window closes only that window. It never hides to the tray and never quits the app. Closing the main window closes all of them and quits.
-- **Call state is per renderer.** `call-connected` and `call-disconnected` update a set of calling senders. Screen-lock inhibition and the app-wide `teams-call-connected` / `teams-call-disconnected` events fire on the first call starting and the last call ending, so a second call never overwrites the first and MQTT never reports "not in a call" while one remains.
-- **Configuration.** `multiWindow.enabled` (default `true`) and `multiWindow.openMeetingsIn` (`window` or `main`, default `window`). `enabled: false` restores the single-window behaviour exactly.
+- **Call state is per renderer.** `call-connected` and `call-disconnected` update a set of calling senders. Screen-lock inhibition and the app-wide `teams-call-connected` / `teams-call-disconnected` events fire on the first call starting and the last call ending.
+- **Configuration.** `multiWindow.enabled` (default `true`), `multiWindow.openMeetingsIn` (`window` or `main`, default `window`) and `multiWindow.focusLayout` (default `true`). `enabled: false` restores the single-window behaviour exactly.
 
-Out of scope: moving a live call between windows ([#2499](https://github.com/IsmaelMartinez/teams-for-linux/issues/2499)), redirecting the Join button, "Add shared display" ([#2983](https://github.com/IsmaelMartinez/teams-for-linux/issues/2983)), and a chat-only layout.
+Out of scope: moving a live call between windows ([#2499](https://github.com/IsmaelMartinez/teams-for-linux/issues/2499)), redirecting the Join button, "Add shared display" ([#2983](https://github.com/IsmaelMartinez/teams-for-linux/issues/2983)).
 
 ## Consequences
 
 ### Positive
 
-- Matches the official client for chats and meetings without hooking the Teams UI beyond reading element ids.
+- A chat pop-out matches the official client: the title is the chat name and the window shows the chat header, the messages and the compose box.
 - Works anywhere the main window works. Windows are ordinary Chromium windows in the same process, so Flatpak needs no sandbox change.
 - Calls in two windows are tracked correctly.
 
 ### Negative
 
-- **The pop-out is the full Teams client opened on the chat**, not the official chat-only pane. A chat-only layout would need CSS against Teams' markup and is deferred.
-- Extra renderers add memory per open window.
-- The double-click gesture and the ids it reads depend on Teams' DOM. If Teams renames them the gesture stops working silently; the menu entry shares the same lookup. Unit tests pin the lookup logic, not Teams' markup.
-- Meeting windows get no tray, badge or notifications of their own by design.
-- Channel conversations and apps are not yet popped out. They need their own routes and remain follow-ups.
+- The layout depends on Microsoft's `data-tid` region names and on the `chat-list-item` / `chat-header` element ids. If Teams renames them, the gesture or the reduced layout stops working. The `:has()` scoping makes the layout fail safe; the gesture fails silently.
+- Meeting windows are still the full client. A reduced layout for them needs a check of the in-call screen, which has not been done.
+- Channel conversations, apps and the calendar are not yet popped out, although the focus layout was verified on the calendar.
+- Extra renderers add memory per open window, and meeting windows get no tray, badge or notifications of their own by design.
 
 ### Flatpak and Wayland
 
-No sandbox changes. Window position restore and always-on-top are best effort on Wayland. Screen sharing from a meeting window uses the same per-session display-media handler as the main window; on Wayland each share still needs the portal picker.
+No sandbox changes. Window position restore and always-on-top are best effort on Wayland. Screen sharing from a meeting window uses the same per-session display-media handler as the main window; on Wayland each share still needs the portal picker. Not yet tested in a Flatpak build.
 
 ## Alternatives Considered
 
-- **Wait for Teams to call `window.open`.** Ruled out by the spike: Teams web does not.
+- **Make Teams render its own pop-out** (enable the desktop flags). Ruled out: the flags are tied to the desktop host mode, and spoofing it blanks the app.
+- **Patch or intercept Microsoft's JavaScript to flip the flags.** Rejected as fragile and unsupported.
 - **One fixed secondary window (ADR-032).** Does not cover chats or several meetings.
 - **Opt-in rather than default.** Rejected: the official client behaves this way, and `multiWindow.enabled: false` is a one-line opt-out.
 

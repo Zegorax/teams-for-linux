@@ -7,7 +7,7 @@ const electronPath = require.resolve('electron');
 const stateKeeperPath = require.resolve('electron-window-state');
 const managerPath = require.resolve('../../app/popoutWindows');
 
-const { roleFromArgv, moduleRunsInRole, ROLE_ARGUMENT } = require('../../app/popoutWindows/role');
+const { moduleRunsInRole, popoutFrameName, parsePopoutFrameName } = require('../../app/popoutWindows/role');
 
 let created;
 let managerModule;
@@ -15,14 +15,17 @@ let managerModule;
 class MockBrowserWindow {
 	constructor(options) {
 		this.options = options;
+		this.loaded = [];
 		this.id = created.length + 1;
 		this.listeners = {};
 		this.destroyed = false;
 		this.minimized = false;
 		this.calls = [];
-		this.loaded = [];
 		this.webContents = {
+			id: 100 + this.id,
+			handlers: {},
 			setWindowOpenHandler: (handler) => { this.windowOpenHandler = handler; },
+			on: (event, listener) => { this.webContents.handlers[event] = listener; },
 		};
 		created.push(this);
 	}
@@ -58,14 +61,6 @@ after(() => {
 beforeEach(() => { created = []; });
 
 describe('window role', () => {
-	it('defaults to main and reads popout and meeting from argv', () => {
-		assert.equal(roleFromArgv(undefined), 'main');
-		assert.equal(roleFromArgv(['electron', 'app']), 'main');
-		assert.equal(roleFromArgv([`${ROLE_ARGUMENT}popout`]), 'popout');
-		assert.equal(roleFromArgv([`${ROLE_ARGUMENT}meeting`]), 'meeting');
-		assert.equal(roleFromArgv([`${ROLE_ARGUMENT}admin`]), 'main', 'unknown roles fall back to main');
-	});
-
 	it('keeps app-wide modules in the main window only', () => {
 		for (const name of ['trayIconRenderer', 'mqttStatusMonitor', 'meetingStartDetector', 'dockIconRenderer', 'settings']) {
 			assert.equal(moduleRunsInRole('main', name), true, name);
@@ -127,71 +122,156 @@ describe('config helpers', () => {
 	});
 });
 
+describe('pop-out frame names', () => {
+	it('round-trips kind and key, keeping colons in the key', () => {
+		const name = popoutFrameName('chat', '19:abc@thread.v2');
+		assert.deepEqual(parsePopoutFrameName(name), { kind: 'chat', key: '19:abc@thread.v2' });
+	});
+
+	it('ignores names that are not pop-out requests or have no key', () => {
+		for (const name of [undefined, '', '_blank', 'tfl-popout:', 'tfl-popout:chat:', 'tfl-popout::x', 'other:chat:x']) {
+			assert.equal(parsePopoutFrameName(name), null, String(name));
+		}
+	});
+});
+
 describe('PopoutWindowManager', () => {
+	const ORIGIN = 'https://teams.live.com';
+	const chatDetails = (thread) => ({
+		url: managerModule.buildChatUrl(ORIGIN, thread),
+		frameName: popoutFrameName('chat', thread),
+	});
+
 	function makeManager(overrides = {}) {
-		const opened = [];
+		const fallback = [];
 		const manager = new managerModule.PopoutWindowManager({
-			config: { partition: 'persist:test', chromeUserAgent: 'UA', frame: true, menubar: 'auto', url: 'https://teams.live.com/v2/', ...overrides },
-			getMainWindow: () => ({ webContents: { getURL: () => 'https://teams.live.com/v2/' } }),
-			handleWindowOpen: (details) => { opened.push(details); return { action: 'deny' }; },
+			config: { frame: true, menubar: 'auto', onNewWindowOpenMeetupJoinUrlInApp: true, ...overrides },
+			fallbackWindowOpen: (details) => { fallback.push(details); return { action: 'deny', fallback: true }; },
 		});
-		return { manager, opened };
+		return { manager, fallback };
 	}
 
-	it('opens a chat on the shared partition with the pop-out role and no tray ownership', () => {
+	function open(manager, details) {
+		const response = manager.handleWindowOpen(details);
+		if (response?.action !== 'allow') return response;
+		const win = new MockBrowserWindow();
+		manager.adopt(win, details);
+		return { response, win };
+	}
+
+	it('allows a chat pop-out with the pop-out role and the opener preserved', () => {
 		const { manager } = makeManager();
-		assert.equal(manager.openChat('48:notes'), true);
-		const [win] = created;
-		assert.equal(win.options.webPreferences.partition, 'persist:test');
-		assert.deepEqual(win.options.webPreferences.additionalArguments, [`${ROLE_ARGUMENT}popout`]);
-		assert.equal(win.loaded[0][0], 'https://teams.live.com/v2/#/l/chat/48%3Anotes/conversations');
-		assert.equal(win.loaded[0][1].userAgent, 'UA');
+		const { response, win } = open(manager, chatDetails('48:notes'));
+		assert.equal(response.action, 'allow');
+		const prefs = response.overrideBrowserWindowOptions.webPreferences;
+		assert.equal(prefs.additionalArguments, undefined, 'the role is looked up over IPC, not passed as an argument');
+		assert.equal(prefs.contextIsolation, false);
+		assert.equal(prefs.partition, undefined, 'the child inherits the opener session');
+		assert.equal(win.__teamsRole, 'popout');
+		assert.equal(manager.roleOf(win.webContents.id), 'popout');
+		assert.equal(manager.roleOf(9999), 'main', 'unknown renderers are the main window');
 		assert.equal(manager.size, 1);
 	});
 
-	it('focuses the existing window instead of opening a duplicate', () => {
+	it('focuses and denies a repeat request instead of opening a duplicate', () => {
 		const { manager } = makeManager();
-		manager.openChat('48:notes');
-		created[0].minimized = true;
-		assert.equal(manager.openChat('48:notes'), true);
-		assert.equal(created.length, 1);
-		assert.deepEqual(created[0].calls, ['restore', 'show', 'focus']);
-		manager.openChat('19:other@thread.v2');
-		assert.equal(created.length, 2);
+		const { win } = open(manager, chatDetails('48:notes'));
+		win.minimized = true;
+		assert.deepEqual(manager.handleWindowOpen(chatDetails('48:notes')), { action: 'deny' });
+		assert.deepEqual(win.calls, ['restore', 'show', 'focus']);
+		assert.equal(manager.handleWindowOpen(chatDetails('19:other@thread.v2')).action, 'allow');
 	});
 
-	it('opens meeting links with the meeting role and rejects other URLs', () => {
+	it('rejects a pop-out name whose URL is not the chat launcher route', () => {
 		const { manager } = makeManager();
-		assert.equal(manager.openMeeting('https://teams.live.com/meet/123?p=x'), true);
-		assert.deepEqual(created[0].options.webPreferences.additionalArguments, [`${ROLE_ARGUMENT}meeting`]);
-		assert.equal(manager.openMeeting('https://teams.live.com/l/chat/0/0?users=a@b.c'), false);
-		assert.equal(manager.openMeeting('https://evil.example/meet/1'), false);
+		for (const url of [
+			'https://evil.example/v2/#/l/chat/48%3Anotes/conversations',
+			'https://teams.live.com/v2/#/l/chat/other/conversations',
+			'https://teams.live.com/somewhere/else',
+		]) {
+			assert.equal(manager.handleWindowOpen({ url, frameName: popoutFrameName('chat', '48:notes') }), null, url);
+		}
+		assert.equal(manager.handleWindowOpen({ url: chatDetails('x').url, frameName: popoutFrameName('unknown', 'x') }), null);
+	});
+
+	it('opens a meeting link in a meeting window of its own, without an opener', () => {
+		const { manager } = makeManager({ partition: 'persist:test', chromeUserAgent: 'UA' });
+		const url = 'https://teams.live.com/meet/123?p=x';
+		assert.deepEqual(manager.handleWindowOpen({ url, frameName: '' }), { action: 'deny' });
 		assert.equal(created.length, 1);
+		const win = created[0];
+		assert.equal(win.options.webPreferences.partition, 'persist:test');
+		assert.equal(win.options.webPreferences.contextIsolation, false);
+		assert.deepEqual(win.loaded, [[url, { userAgent: 'UA' }]]);
+		assert.equal(win.__teamsRole, 'meeting');
+		assert.equal(manager.roleOf(win.webContents.id), 'meeting');
+		assert.equal(manager.size, 1);
+	});
+
+	it('focuses an open meeting window instead of opening another', () => {
+		const { manager } = makeManager();
+		const url = 'https://teams.live.com/meet/123?p=x';
+		manager.handleWindowOpen({ url, frameName: '' });
+		created[0].minimized = true;
+		assert.deepEqual(manager.handleWindowOpen({ url, frameName: '' }), { action: 'deny' });
+		assert.equal(created.length, 1);
+		assert.deepEqual(created[0].calls, ['restore', 'show', 'focus']);
+	});
+
+	it('leaves other links alone', () => {
+		const { manager } = makeManager();
+		assert.equal(manager.handleWindowOpen({ url: 'https://teams.live.com/l/chat/0/0?users=a@b.c', frameName: '' }), null);
+		assert.equal(manager.handleWindowOpen({ url: 'https://evil.example/meet/1', frameName: '' }), null);
+		assert.equal(created.length, 0);
+	});
+
+	it('keeps meeting links out of a window when told to use the main window or the in-app option is off', () => {
+		const url = 'https://teams.live.com/meet/123';
+		assert.equal(makeManager({ multiWindow: { openMeetingsIn: 'main' } }).manager.handleWindowOpen({ url, frameName: '' }), null);
+		assert.equal(makeManager({ onNewWindowOpenMeetupJoinUrlInApp: false }).manager.handleWindowOpen({ url, frameName: '' }), null);
 	});
 
 	it('does nothing when multiWindow is disabled', () => {
 		const { manager } = makeManager({ multiWindow: { enabled: false } });
-		assert.equal(manager.openChat('48:notes'), false);
-		assert.equal(manager.openMeeting('https://teams.live.com/meet/123'), false);
-		assert.equal(created.length, 0);
+		assert.equal(manager.handleWindowOpen(chatDetails('48:notes')), null);
+		assert.equal(manager.handleWindowOpen({ url: 'https://teams.live.com/meet/123', frameName: '' }), null);
 	});
 
-	it('routes window.open from a pop-out through the shared policy', () => {
-		const { manager, opened } = makeManager();
-		manager.openChat('48:notes');
-		const result = created[0].windowOpenHandler({ url: 'https://example.org/' });
-		assert.deepEqual(result, { action: 'deny' });
-		assert.equal(opened.length, 1);
+	it('does not adopt a window it did not allow', () => {
+		const { manager } = makeManager();
+		manager.adopt(new MockBrowserWindow({}), chatDetails('48:notes'));
+		assert.equal(manager.size, 0);
+	});
+
+	it('installs the policy on the main web contents and on adopted windows, falling back for other links', () => {
+		const { manager, fallback } = makeManager();
+		const mainContents = new MockBrowserWindow().webContents;
+		manager.attach(mainContents);
+		const { win } = open(manager, chatDetails('48:notes'));
+		assert.equal(typeof win.windowOpenHandler, 'function', 'adopted window gets the policy');
+		const other = win.windowOpenHandler({ url: 'https://example.org/', frameName: '' });
+		assert.deepEqual(other, { action: 'deny', fallback: true });
+		assert.equal(fallback.length, 1);
+	});
+
+	it('adopts a created window through did-create-window', () => {
+		const { manager } = makeManager();
+		const mainContents = new MockBrowserWindow().webContents;
+		manager.attach(mainContents);
+		const details = chatDetails('48:notes');
+		manager.handleWindowOpen(details);
+		mainContents.handlers['did-create-window'](new MockBrowserWindow(), details);
+		assert.equal(manager.size, 1);
 	});
 
 	it('forgets a window when it closes and closes every window on request', () => {
 		const { manager } = makeManager();
-		manager.openChat('48:notes');
-		manager.openChat('19:other@thread.v2');
-		created[0].listeners.closed();
+		const first = open(manager, chatDetails('48:notes')).win;
+		const second = open(manager, chatDetails('19:other@thread.v2')).win;
+		first.listeners.closed();
 		assert.equal(manager.size, 1);
 		manager.closeAll();
 		assert.equal(manager.size, 0);
-		assert.equal(created[1].destroyed, true);
+		assert.equal(second.destroyed, true);
 	});
 });

@@ -828,18 +828,20 @@ Chats and meetings open in their own windows, as in the official Windows and mac
 |--------|------|---------|-------------|
 | `multiWindow.enabled` | `boolean` | `true` | Allow chat pop-outs and meeting windows. `false` keeps a single window |
 | `multiWindow.openMeetingsIn` | `string` | `"window"` | `"window"` opens meeting join links in a dedicated window, `"main"` loads them in the main window. Applies when `urlHandling.openMeetupJoinInApp` is on |
+| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in a pop-out (no app bar or list pane), as the official client does. `false` shows the full Teams client |
 
 ```json title="Example Configuration"
 {
   "multiWindow": {
     "enabled": true,
-    "openMeetingsIn": "window"
+    "openMeetingsIn": "window",
+    "focusLayout": true
   }
 }
 ```
 
 > [!NOTE]
-> Double-click a chat in the list, or use **Open Chat in New Window** (`Ctrl+Alt+O`), to pop it out. Closing a pop-out closes only that window; closing the main window closes them all. The pop-out is the full Teams client opened on that chat, not a chat-only pane. See [ADR-033](development/adr/033-multi-window-popouts.md).
+> Double-click a chat in the list, or use **Open Chat in New Window** (`Ctrl+Alt+O`), to pop it out. Closing a pop-out closes only that window; closing the main window closes them all. A pop-out shows only the chat (set `multiWindow.focusLayout` to `false` for the full client). See [ADR-033](development/adr/033-multi-window-popouts.md).
 
 ### Performance & Hardware
 

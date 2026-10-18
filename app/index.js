@@ -266,6 +266,11 @@ if (gotTheLock) {
   ipcMain.handle("get-config", async () => {
     return config;
   });
+  // Role of the window a renderer runs in: "main", or "popout" / "meeting" for
+  // windows opened by the pop-out manager. The preload filters its modules by it.
+  ipcMain.handle("get-window-role", (event) =>
+    mainAppWindow.getPopoutWindows()?.roleOf(event.sender.id) ?? "main"
+  );
 
   notificationService.initialize();
   screenSharingService.initialize();
@@ -282,11 +287,6 @@ if (gotTheLock) {
   ipcMain.handle("user-status-changed", userStatusChangedHandler);
   // Set application badge count (dock/taskbar notification)
   ipcMain.handle("set-badge-count", setBadgeCountHandler);
-  // Open a chat thread in its own window, or focus the window already showing it.
-  // Resolves false when the feature is off or the thread id is not acceptable.
-  ipcMain.handle("popout-open-chat", (_event, threadId) =>
-    mainAppWindow.getPopoutWindows()?.openChat(threadId) ?? false
-  );
 
   // Update Dock icon with status overlay on macOS
   ipcMain.on("dock-icon-update", (_event, dataUrl) => {
