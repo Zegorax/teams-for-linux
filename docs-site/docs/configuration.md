@@ -828,7 +828,7 @@ Chats and meetings open in their own windows, as in the official Windows and mac
 |--------|------|---------|-------------|
 | `multiWindow.enabled` | `boolean` | `true` | Allow chat pop-outs and meeting windows. `false` keeps a single window |
 | `multiWindow.openMeetingsIn` | `string` | `"window"` | `"window"` opens meeting join links in a dedicated window, `"main"` loads them in the main window. Applies when `urlHandling.openMeetupJoinInApp` is on |
-| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in a pop-out (no app bar or list pane), as the official client does. `false` shows the full Teams client |
+| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in pop-out and meeting windows (no app bar, list pane or header), as the official client does. `false` shows the full Teams client |
 
 ```json title="Example Configuration"
 {

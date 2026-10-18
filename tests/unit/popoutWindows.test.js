@@ -218,6 +218,26 @@ describe('PopoutWindowManager', () => {
 		assert.deepEqual(created[0].calls, ['restore', 'show', 'focus']);
 	});
 
+	it('opens a meeting link from outside Teams (a deep link) in a meeting window', () => {
+		const { manager } = makeManager({ partition: 'persist:test', chromeUserAgent: 'UA' });
+		const url = 'https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0?context=%7B%7D';
+		assert.equal(manager.openMeeting(url), true);
+		assert.equal(created.length, 1);
+		assert.deepEqual(created[0].loaded, [[url, { userAgent: 'UA' }]]);
+		created[0].minimized = true;
+		assert.equal(manager.openMeeting(url), true, 'a repeat focuses the open window');
+		assert.equal(created.length, 1);
+		assert.deepEqual(created[0].calls, ['restore', 'show', 'focus']);
+	});
+
+	it('does not take deep links that are not meeting joins, or when told to use the main window', () => {
+		assert.equal(makeManager().manager.openMeeting('https://teams.live.com/l/chat/0/0?users=a@b.c'), false);
+		assert.equal(makeManager().manager.openMeeting('https://evil.example/meet/1'), false);
+		assert.equal(makeManager({ multiWindow: { openMeetingsIn: 'main' } }).manager.openMeeting('https://teams.live.com/meet/1'), false);
+		assert.equal(makeManager({ multiWindow: { enabled: false } }).manager.openMeeting('https://teams.live.com/meet/1'), false);
+		assert.equal(created.length, 0);
+	});
+
 	it('leaves other links alone', () => {
 		const { manager } = makeManager();
 		assert.equal(manager.handleWindowOpen({ url: 'https://teams.live.com/l/chat/0/0?users=a@b.c', frameName: '' }), null);

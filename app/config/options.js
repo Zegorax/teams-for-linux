@@ -984,7 +984,7 @@ module.exports = {
           "focusLayout": {
             type: "boolean",
             describe:
-              "Show only the content in a pop-out window (no app bar or list pane), as the official client does. When false a pop-out shows the full Teams client.",
+              "Show only the content in pop-out and meeting windows (no app bar, list pane or header), as the official client does. When false they show the full Teams client.",
           },
         },
         applyMode: "restart",

@@ -137,6 +137,28 @@ class PopoutWindowManager {
   }
 
   /**
+   * Opens a meeting join link in a meeting window, or focuses the window that
+   * already has it. For links that reach the app from outside Teams (a deep
+   * link, a second instance), which never pass through `window.open`.
+   *
+   * @param {string} url
+   * @returns {boolean} true when a meeting window took the link
+   */
+  openMeeting(url) {
+    if (!isEnabled(this.#config) || meetingTarget(this.#config) !== "window" || !isMeetingJoinUrl(url)) {
+      return false;
+    }
+    const request = { key: `meeting:${url}`, role: ROLE_MEETING };
+    const existing = this.#windows.get(request.key);
+    if (existing && !existing.isDestroyed()) {
+      this.#focus(existing);
+    } else {
+      this.#openMeetingWindow(request, url);
+    }
+    return true;
+  }
+
+  /**
    * Registers the window Electron created for an allowed request. Wire it to
    * `did-create-window` on every webContents that installs `handleWindowOpen`.
    *

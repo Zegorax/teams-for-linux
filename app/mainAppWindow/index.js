@@ -978,6 +978,13 @@ exports.onAppSecondInstance = function onAppSecondInstance(event, args) {
  * @param {string} url - Deep link URL resolved from the launch argument
  */
 async function openDeepLink(url) {
+  // A meeting join link gets a window of its own, as in the official client.
+  // The main window is left alone, so a call it is in is not disturbed.
+  if (popoutWindows?.openMeeting(url)) {
+    console.debug("[DEEPLINK] opened in a meeting window");
+    return;
+  }
+
   // The newest link wins, whichever way it ends up opening: one held from
   // earlier must not open over it, and the full navigation below can outlast
   // the release delay before `did-navigate` would get to cancel it.

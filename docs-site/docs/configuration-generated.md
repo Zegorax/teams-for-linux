@@ -234,7 +234,7 @@ Object options group several related settings. The tables below list each nested
 |-------|------|---------|-------------|
 | `multiWindow.enabled` | `boolean` | `true` | Allow chat pop-outs (double-click a chat, or the Window menu) and meeting windows. When false the app keeps a single window. |
 | `multiWindow.openMeetingsIn` | `string` | `"window"` | Where meeting join links open: a dedicated window, or the main window. Applies when urlHandling.openMeetupJoinInApp is on. |
-| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in a pop-out window (no app bar or list pane), as the official client does. When false a pop-out shows the full Teams client. |
+| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in pop-out and meeting windows (no app bar, list pane or header), as the official client does. When false they show the full Teams client. |
 
 ### quickChat
 
