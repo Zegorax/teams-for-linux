@@ -6,7 +6,7 @@ id: 032-secondary-window-for-calls
 
 ## Status
 
-🚧 Proposed (2026-09-18). Supersedes [ADR-010](010-multiple-windows-support.md).
+🔄 Superseded by [ADR-033](033-multi-window-popouts.md) (2026-10-18), which generalises it to chat pop-outs and per-meeting windows. Originally proposed 2026-09-18; supersedes [ADR-010](010-multiple-windows-support.md).
 
 ## Context
 

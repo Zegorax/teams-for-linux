@@ -47,6 +47,7 @@ let profilesManagerRef = null;
 let aboutBlankRequestCount = 0;
 let config;
 let window = null;
+let popoutWindows = null;
 let appConfig = null;
 let customBackgroundService = null;
 let streamSelector;
@@ -59,6 +60,7 @@ let browserWindowManager = null;
 let titleOverride = null;
 
 const isMac = os.platform() === "darwin";
+const { PopoutWindowManager } = require("../popoutWindows");
 
 function setupScreenSharing(selectedSource) {
   screenSharingService.setSelectedSource(selectedSource);
@@ -742,6 +744,14 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
   window = await browserWindowManager.createWindow();
   streamSelector = new StreamSelector(window);
 
+  popoutWindows = new PopoutWindowManager({
+    config,
+    fallbackWindowOpen: onNewWindow,
+    iconImage: iconChooser
+      ? browserWindowManager.getIconImage(iconChooser.getFile())
+      : undefined,
+  });
+
   // Restrict WebRTC ICE candidate gathering to the interface with the default
   // route, preventing secondary interfaces (e.g. an ethernet adapter with no
   // internet gateway) from being advertised, which causes asymmetric STUN
@@ -926,6 +936,7 @@ exports.bindDisplayMediaHandler = bindDisplayMediaHandler;
 exports.bindWindowOpenHandler = bindWindowOpenHandler;
 exports.injectScreenSharingLogic = injectScreenSharingLogic;
 exports.setTitleOverride = setTitleOverride;
+exports.getPopoutWindows = () => popoutWindows;
 
 exports.setQuickChatManager = function (quickChatManager) {
   if (menus) {
@@ -967,6 +978,13 @@ exports.onAppSecondInstance = function onAppSecondInstance(event, args) {
  * @param {string} url - Deep link URL resolved from the launch argument
  */
 async function openDeepLink(url) {
+  // A meeting join link gets a window of its own, as in the official client.
+  // The main window is left alone, so a call it is in is not disturbed.
+  if (popoutWindows?.openMeeting(url)) {
+    console.debug("[DEEPLINK] opened in a meeting window");
+    return;
+  }
+
   // The newest link wins, whichever way it ends up opening: one held from
   // earlier must not open over it, and the full navigation below can outlast
   // the release delay before `did-navigate` would get to cancel it.
@@ -1473,6 +1491,8 @@ function onWindowClosed() {
     screenSharingService.setSelectedSource(null);
   }
 
+  popoutWindows?.closeAll();
+  popoutWindows = null;
   window = null;
   app.quit();
 }
@@ -1498,7 +1518,14 @@ function addEventHandlers() {
   });
 
   window.on("page-title-updated", onPageTitleUpdated);
-  window.webContents.setWindowOpenHandler(onNewWindow);
+  // Pop-outs and meeting windows are opened with window.open so they keep an
+  // opener; the manager decides which requests those are and falls back to
+  // onNewWindow for the rest.
+  if (popoutWindows) {
+    popoutWindows.attach(window.webContents);
+  } else {
+    window.webContents.setWindowOpenHandler(onNewWindow);
+  }
   window.webContents.session.webRequest.onBeforeRequest(
     { urls: ["https://*/*"] },
     onBeforeRequestHandler

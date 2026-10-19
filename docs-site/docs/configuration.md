@@ -32,6 +32,7 @@ For a complete, always-up-to-date list of every option generated directly from t
   - [MQTT Integration](#mqtt-integration)
   - [Microsoft Graph API](#microsoft-graph-api)
   - [Quick Chat](#quick-chat)
+  - [Multiple Windows](#multiple-windows)
   - [Performance & Hardware](#performance--hardware)
   - [Wayland](#wayland)
   - [Cache & Storage](#cache--storage)
@@ -818,6 +819,29 @@ All topics except `incoming-call/caller` use retained messages, ensuring subscri
 
 > [!NOTE]
 > Quick Chat requires Graph API to be enabled (`graphApi.enabled: true`) for contact search and inline messaging. The modal allows you to search for contacts, click to compose a message, and send it directly without leaving your current context. The keyboard shortcut uses Electron accelerator format. No shortcut is registered by default; you must provide one explicitly.
+
+### Multiple Windows
+
+Chats and meetings open in their own windows, as in the official Windows and macOS clients. Pop-out windows are signed in with the same account and share the main window's tray, badge and notifications.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `multiWindow.enabled` | `boolean` | `true` | Allow chat pop-outs and meeting windows. `false` keeps a single window |
+| `multiWindow.openMeetingsIn` | `string` | `"window"` | `"window"` opens meeting join links in a dedicated window, `"main"` loads them in the main window. Applies when `urlHandling.openMeetupJoinInApp` is on |
+| `multiWindow.focusLayout` | `boolean` | `true` | Show only the content in pop-out and meeting windows (no app bar, list pane or header), as the official client does. `false` shows the full Teams client |
+
+```json title="Example Configuration"
+{
+  "multiWindow": {
+    "enabled": true,
+    "openMeetingsIn": "window",
+    "focusLayout": true
+  }
+}
+```
+
+> [!NOTE]
+> Double-click a chat in the list, or use **Open Chat in New Window** (`Ctrl+Alt+O`), to pop it out. Joining a meeting from the calendar, a meeting link, or a `msteams://` link opens it in its own window too, with the pre-join screen there; the main window is left as it was. Closing a pop-out closes only that window; closing the main window closes them all. A pop-out shows only the chat (set `multiWindow.focusLayout` to `false` for the full client). See [ADR-033](development/adr/033-multi-window-popouts.md).
 
 ### Performance & Hardware
 

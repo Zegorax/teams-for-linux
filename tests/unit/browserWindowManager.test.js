@@ -73,6 +73,36 @@ describe('BrowserWindowManager incoming call routing', () => {
 		assert.deepEqual(appEvents.at(-1), ['teams-call-disconnected', sender]);
 	});
 
+	it('keeps call state and screen-lock inhibition until the last window leaves its call', async () => {
+		const manager = new BrowserWindowManager({ config: {} });
+		const lockCalls = [];
+		manager.disableScreenLockElectron = () => lockCalls.push('inhibit');
+		manager.disableScreenLockWakeLockSentinel = () => lockCalls.push('inhibit');
+		manager.enableScreenLockElectron = () => lockCalls.push('release');
+		manager.enableScreenLockWakeLockSentinel = () => lockCalls.push('release');
+		const main = { id: 1 };
+		const meeting = { id: 2 };
+		const eventsBefore = appEvents.length;
+
+		await manager.assignOnCallConnectedHandler()({ sender: main });
+		await manager.assignOnCallConnectedHandler()({ sender: meeting });
+		assert.deepEqual(lockCalls, ['inhibit'], 'inhibit once for the first call only');
+		assert.equal(manager.isOnCall, true);
+
+		await manager.assignOnCallDisconnectedHandler()({ sender: meeting });
+		assert.deepEqual(lockCalls, ['inhibit'], 'still on a call in the main window');
+		assert.equal(manager.isOnCall, true);
+
+		await manager.assignOnCallDisconnectedHandler()({ sender: main });
+		assert.deepEqual(lockCalls, ['inhibit', 'release']);
+		assert.equal(manager.isOnCall, false);
+		assert.deepEqual(
+			appEvents.slice(eventsBefore).map(([name]) => name),
+			['teams-call-connected', 'teams-call-disconnected'],
+			'app-wide events fire once per aggregate transition'
+		);
+	});
+
 	it('routes allowed actions to the renderer that reported the ring', async () => {
 		const manager = new BrowserWindowManager({ config: {} });
 		const senderSent = [];
