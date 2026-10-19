@@ -15,6 +15,7 @@ const allowedChannels = new Set([
   'config-changed',
   'get-config',
   'get-window-role',
+  'popout-open-meeting',
   'get-system-idle-state',
   'get-app-version',
   

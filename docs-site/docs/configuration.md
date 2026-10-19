@@ -841,7 +841,7 @@ Chats and meetings open in their own windows, as in the official Windows and mac
 ```
 
 > [!NOTE]
-> Double-click a chat in the list, or use **Open Chat in New Window** (`Ctrl+Alt+O`), to pop it out. Closing a pop-out closes only that window; closing the main window closes them all. A pop-out shows only the chat (set `multiWindow.focusLayout` to `false` for the full client). See [ADR-033](development/adr/033-multi-window-popouts.md).
+> Double-click a chat in the list, or use **Open Chat in New Window** (`Ctrl+Alt+O`), to pop it out. Joining a meeting from the calendar, a meeting link, or a `msteams://` link opens it in its own window too, with the pre-join screen there; the main window is left as it was. Closing a pop-out closes only that window; closing the main window closes them all. A pop-out shows only the chat (set `multiWindow.focusLayout` to `false` for the full client). See [ADR-033](development/adr/033-multi-window-popouts.md).
 
 ### Performance & Hardware
 

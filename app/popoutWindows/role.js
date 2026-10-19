@@ -15,6 +15,7 @@ const MAIN_ONLY_MODULES = new Set([
   "meetingStartDetector",
   "dockIconRenderer",
   "customStickers",
+  "meetingJoinRedirect",
 ]);
 
 // A renderer asks for a pop-out by calling `window.open` with a frame name of
@@ -23,6 +24,10 @@ const MAIN_ONLY_MODULES = new Set([
 // process recognises the name in `setWindowOpenHandler`.
 const POPOUT_FRAME_PREFIX = "tfl-popout:";
 const KIND_CHAT = "chat";
+
+// Join links only. `meetupJoinRegEx` also matches chat and channel launchers,
+// which must keep their existing behaviour.
+const MEETING_PATH_PATTERN = /^\/(?:l\/meetup-join\/|meet\/|v2\/meet\/)/;
 
 // Teams thread ids look like `19:abc...@thread.v2`, `19:<guid>_<guid>@unq.gbl.spaces`
 // or `48:notes`. The allowlist keeps anything that could break out of the
@@ -52,6 +57,25 @@ function buildChatUrl(origin, threadId) {
     return null;
   }
   return `${parsed.origin}/v2/#/l/chat/${encodeURIComponent(threadId)}/conversations`;
+}
+
+/**
+ * Whether a URL is a Teams meeting join link on a Teams host.
+ *
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isMeetingJoinUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      isTeamsHost(parsed.hostname) &&
+      MEETING_PATH_PATTERN.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -96,6 +120,7 @@ module.exports = {
   ROLE_MEETING,
   ROLE_POPOUT,
   buildChatUrl,
+  isMeetingJoinUrl,
   moduleRunsInRole,
   parsePopoutFrameName,
   popoutFrameName,

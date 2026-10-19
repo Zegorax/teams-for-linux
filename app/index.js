@@ -266,6 +266,13 @@ if (gotTheLock) {
   ipcMain.handle("get-config", async () => {
     return config;
   });
+  // Open a meeting join link in a meeting window. The renderer sends the link it
+  // saw Teams record when a meeting is joined from inside Teams (the calendar);
+  // resolves true when a window took it, so the renderer can cancel the in-place
+  // pre-join, and false when the feature is off or the link is not a join link.
+  ipcMain.handle("popout-open-meeting", (_event, url) =>
+    mainAppWindow.getPopoutWindows()?.openMeeting(url) ?? false
+  );
   // Role of the window a renderer runs in: "main", or "popout" / "meeting" for
   // windows opened by the pop-out manager. The preload filters its modules by it.
   ipcMain.handle("get-window-role", (event) =>

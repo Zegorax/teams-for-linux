@@ -1,23 +1,19 @@
 const { BrowserWindow, nativeTheme } = require("electron");
 const path = require("node:path");
 const windowStateKeeper = require("electron-window-state");
-const { isTeamsHost } = require("../helpers/teamsHosts");
 const {
   KIND_CHAT,
   ROLE_MAIN,
   ROLE_MEETING,
   ROLE_POPOUT,
   buildChatUrl,
+  isMeetingJoinUrl,
   parsePopoutFrameName,
 } = require("./role");
 
 const MIN_WIDTH = 320;
 const MIN_HEIGHT = 240;
 const CASCADE_STEP = 30;
-
-// Join links only. `meetupJoinRegEx` also matches chat and channel launchers,
-// which must keep their existing behaviour.
-const MEETING_PATH_PATTERN = /^\/(?:l\/meetup-join\/|meet\/|v2\/meet\/)/;
 
 /**
  * Whether the multiWindow feature is on. It is on unless explicitly disabled.
@@ -35,25 +31,6 @@ function isEnabled(config) {
  */
 function meetingTarget(config) {
   return config?.multiWindow?.openMeetingsIn === "main" ? "main" : "window";
-}
-
-/**
- * Whether a URL is a Teams meeting join link on a Teams host.
- *
- * @param {string} url
- * @returns {boolean}
- */
-function isMeetingJoinUrl(url) {
-  try {
-    const parsed = new URL(url);
-    return (
-      parsed.protocol === "https:" &&
-      isTeamsHost(parsed.hostname) &&
-      MEETING_PATH_PATTERN.test(parsed.pathname)
-    );
-  } catch {
-    return false;
-  }
 }
 
 /**
